@@ -1,0 +1,36 @@
+From a3ee2ac9566b46dcc8b2f8fe6568d0d51601355d Mon Sep 17 00:00:00 2001
+From: killbus <killbus@users.noreply.github.com>
+Date: Sat, 6 Apr 2024 19:18:51 +0800
+Subject: [PATCH 3/3] fix: Increase default ecs mask length for IPv4 and IPv6
+
+- Increase default mask length for IPv4 from 24 to 32.
+- Increase default mask length for IPv6 from 56 to 128.
+---
+ proxy/helpers.go | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/proxy/helpers.go b/proxy/helpers.go
+index 273e178..7f0dbc6 100644
+--- a/proxy/helpers.go
++++ b/proxy/helpers.go
+@@ -105,13 +105,15 @@ func setECS(m *dns.Msg, ip net.IP, scope uint8) (subnet *net.IPNet) {
+ 	const (
+ 		// defaultECSv4 is the default length of network mask for IPv4 address
+ 		// in ECS option.
+-		defaultECSv4 = 24
++		// defaultECSv4 = 24
++		defaultECSv4 = 32
+ 
+ 		// defaultECSv6 is the default length of network mask for IPv6 address
+ 		// in ECS.  The size of 7 octets is chosen as a reasonable minimum since
+ 		// at least Google's public DNS refuses requests containing the options
+ 		// with longer network masks.
+-		defaultECSv6 = 56
++		// defaultECSv6 = 56
++		defaultECSv6 = 128
+ 	)
+ 
+ 	e := &dns.EDNS0_SUBNET{
+-- 
+2.43.0.windows.1
+

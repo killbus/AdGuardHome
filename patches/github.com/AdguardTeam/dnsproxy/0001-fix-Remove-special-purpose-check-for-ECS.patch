@@ -1,0 +1,38 @@
+From 2e0a89aa2a032bb5016b9c60112393ee6b336632 Mon Sep 17 00:00:00 2001
+From: killbus <killbus@users.noreply.github.com>
+Date: Wed, 3 Apr 2024 14:10:12 +0800
+Subject: [PATCH] fix: Remove special purpose check for ECS
+
+The check from `netutil.IsSpecialPurpose(cliAddr)` is inverted,
+Even special purpose ip will be set as ECS.
+---
+ proxy/proxy.go | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/proxy/proxy.go b/proxy/proxy.go
+index 767ebb7..82ce69d 100644
+--- a/proxy/proxy.go
++++ b/proxy/proxy.go
+@@ -792,13 +792,13 @@ func (dctx *DNSContext) processECS(cliIP net.IP) {
+ 		cliAddr, _ = netip.AddrFromSlice(cliIP)
+ 	}
+ 
+-	if !netutil.IsSpecialPurpose(cliAddr) {
+-		// A Stub Resolver MUST set SCOPE PREFIX-LENGTH to 0.  See RFC 7871
+-		// Section 6.
+-		dctx.ReqECS = setECS(dctx.Req, cliIP, 0)
++	// if !netutil.IsSpecialPurpose(cliAddr) {
++	// A Stub Resolver MUST set SCOPE PREFIX-LENGTH to 0.  See RFC 7871
++	// Section 6.
++	dctx.ReqECS = setECS(dctx.Req, cliIP, 0)
+ 
+-		log.Debug("dnsproxy: setting ecs: %s", dctx.ReqECS)
+-	}
++	log.Debug("dnsproxy: setting ecs: %s", dctx.ReqECS)
++	// }
+ }
+ 
+ // newDNSContext returns a new properly initialized *DNSContext.
+-- 
+2.43.0.windows.1
+

@@ -29,3 +29,5 @@ go="${GO:-go}"
 readonly go
 
 "$go" mod download "$x_flags"
+
+sh ./scripts/make/go-patch.sh
