@@ -8,8 +8,6 @@ cloud.google.com/go/compute/metadata v0.10.0 h1:pyKMUQSwchgkIBBJGdILqQbs/BNJXqwS
 cloud.google.com/go/compute/metadata v0.10.0/go.mod h1:rGFHRrIif570kSibjFTMbt6/4/tzgJWFGI/HVol4GIk=
 github.com/AdguardTeam/dnscrypt v0.0.3 h1:o2Zg+/CRCPS2lPobMzYs59aE3RNdMKfOBk34bPbbUbg=
 github.com/AdguardTeam/dnscrypt v0.0.3/go.mod h1:qCFs51rLfNzEDZqb6nz1tocVLnEearJ1zng6O3I6ecA=
-github.com/AdguardTeam/dnsproxy v0.86.0 h1:t9966vx4c3Wm6/9dhM4YI9L6uvIJ/EMNw9JpbEAyKYw=
-github.com/AdguardTeam/dnsproxy v0.86.0/go.mod h1:6kCM5M/gtuQr/0BjtnReHlK6+N0BTee+WHOq3m1JNq4=
 github.com/AdguardTeam/golibs v0.35.18 h1:VLmDzTtbtA7yLbBE1zcOE4evW4PJOg4vAeZSCqvjwcM=
 github.com/AdguardTeam/golibs v0.35.18/go.mod h1:FOkZIIU5xLVEk15+02uRzg1pwNr3XSpjj8CLMJp75rk=
 github.com/AdguardTeam/urlfilter v0.23.4 h1:3cwt5xj7lpK2t3sWtr9WI8mmsKP+RtpkdnEy7lrn8cg=
@@ -155,6 +153,8 @@ github.com/jstemmer/go-junit-report/v2 v2.1.0 h1:X3+hPYlSczH9IMIpSC9CQSZA0L+BipY
 github.com/jstemmer/go-junit-report/v2 v2.1.0/go.mod h1:mgHVr7VUo5Tn8OLVr1cKnLuEy0M92wdRntM99h7RkgQ=
 github.com/kardianos/service v1.3.0 h1:/LGy+xPP2TM+GLTiCZ2di7cy0Jd/qrawlTUfqKYFdTI=
 github.com/kardianos/service v1.3.0/go.mod h1:E4V9ufUuY82F7Ztlu1eN9VXWIQxg8NoLQlmFe0MtrXc=
+github.com/killbus/dnsproxy v0.0.0-20261116002938-f3381adb7b52 h1:qgKnUSh7C7SxR64aw11mMTQULqLD/wOStk8iZfDBj6k=
+github.com/killbus/dnsproxy v0.0.0-20261116002938-f3381adb7b52/go.mod h1:PNpJq47fhm4mECS9cVeZkwAlbDxLIm99yoniwhQns90=
 github.com/kisielk/errcheck v1.30.0 h1:ZIxNDAfAd4larXHTceoZP/dYPAB90dHg1OYhA2sVh5k=
 github.com/kisielk/errcheck v1.30.0/go.mod h1:uiCAInmFuyOje4VDdbQSP9mgqf5gORYSXrDf19XilsI=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=

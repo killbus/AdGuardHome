@@ -159,3 +159,5 @@ tool (
 
 // See CVE-2026-98432.
 godebug multipathtcp=0
+
+replace github.com/AdguardTeam/dnsproxy => github.com/killbus/dnsproxy v0.0.0-20261116002938-f3381adb7b52
