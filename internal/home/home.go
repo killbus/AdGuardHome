@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -46,6 +47,8 @@ import (
 	"github.com/AdguardTeam/golibs/netutil/urlutil"
 	"github.com/AdguardTeam/golibs/osutil"
 	"github.com/AdguardTeam/golibs/osutil/executil"
+	"github.com/AdguardTeam/golibs/stringutil"
+	"github.com/AdguardTeam/golibs/timeutil"
 )
 
 // Global context
@@ -60,6 +63,11 @@ type homeContext struct {
 	dhcpServer dhcpd.Interface    // DHCP module
 
 	filters *filtering.DNSFilter // DNS filtering module
+
+	// serviceBootstrapResolvers are the custom bootstrap resolvers of the
+	// safe browsing and parental control upstreams.  They are closed on
+	// shutdown.
+	serviceBootstrapResolvers []*upstream.UpstreamResolver
 
 	controlLock sync.Mutex
 }
@@ -473,12 +481,122 @@ func setupBindOpts(opts options) (err error) {
 }
 
 // safeBrowsingResolvers is a slice of static IP addresses of the safebrowsing
-// bootstrap DNS resolvers.
+// bootstrap DNS resolvers.  They are used to bootstrap the safe browsing and
+// parental control upstreams when the configured server is a domain name.
 var safeBrowsingResolvers = upstream.StaticResolver{
 	netip.MustParseAddr("94.140.14.15"),
 	netip.MustParseAddr("94.140.15.16"),
 	netip.MustParseAddr("2a10:50c0::bad1:ff"),
 	netip.MustParseAddr("2a10:50c0::bad2:ff"),
+}
+
+// defaultServiceTimeout is the default timeout for requests to the safe
+// browsing and parental control upstreams, and for their bootstrap resolvers.
+const defaultServiceTimeout = 3 * time.Second
+
+// newServiceUpstream converts a user-configured service server (safe browsing
+// or parental control) into an [upstream.Upstream].  When the server address
+// needs name resolution, bootstrap is used for it.  bootstrap must not be nil.
+func newServiceUpstream(
+	ctx context.Context,
+	baseLogger *slog.Logger,
+	server string,
+	service string,
+	bootstrap upstream.Resolver,
+	timeout timeutil.Duration,
+) (upstream.Upstream, error) {
+	timeout = orDefaultDuration(timeout, timeutil.Duration(defaultServiceTimeout))
+
+	upsOpts := &upstream.Options{
+		Logger:    aghslog.NewForUpstream(baseLogger, aghslog.UpstreamTypeService),
+		Timeout:   time.Duration(timeout),
+		Bootstrap: bootstrap,
+	}
+
+	ups, err := upstream.AddressToUpstream(server, upsOpts)
+	if err != nil {
+		return nil, fmt.Errorf("converting %s server: %w", service, err)
+	}
+
+	baseLogger.DebugContext(ctx, "service upstream ready", "service", service, "server", server)
+
+	return ups, nil
+}
+
+// newServiceBootstrapResolver returns the resolver that is used to bootstrap
+// the safe browsing and parental control upstreams.  addrs is the list of
+// upstream resolvers from the configuration; it is parsed with the same
+// syntax as upstream server addresses.  When addrs is empty, the default
+// AdGuard family DNS resolvers are used.  The returned resolvers must be
+// closed when they are no longer needed.
+func newServiceBootstrapResolver(
+	ctx context.Context,
+	baseLogger *slog.Logger,
+	addrs []string,
+	timeout timeutil.Duration,
+) (upstream.Resolver, []*upstream.UpstreamResolver, error) {
+	timeout = orDefaultDuration(timeout, timeutil.Duration(defaultServiceTimeout))
+
+	addrs = stringutil.FilterOut(addrs, aghnet.IsCommentOrEmpty)
+
+	if len(addrs) == 0 {
+		return safeBrowsingResolvers, nil, nil
+	}
+
+	opts := &upstream.Options{
+		Logger:  aghslog.NewForUpstream(baseLogger, aghslog.UpstreamTypeBootstrap),
+		Timeout: time.Duration(timeout),
+	}
+
+	resolvers, err := aghnet.ParseBootstraps(addrs, opts)
+	if err != nil {
+		var notBootstrap upstream.NotBootstrapError
+		if errors.As(err, &notBootstrap) {
+			return nil, nil, fmt.Errorf(
+				"parsing service bootstrap resolvers: %w: entries must be IP-literal addresses",
+				err,
+			)
+		}
+		return nil, nil, fmt.Errorf("parsing service bootstrap resolvers: %w", err)
+	}
+
+	var parallel upstream.ParallelResolver
+	for _, r := range resolvers {
+		parallel = append(parallel, upstream.NewCachingResolver(r))
+	}
+
+	baseLogger.DebugContext(ctx, "service bootstrap resolvers ready", "resolvers", len(resolvers))
+
+	return parallel, resolvers, nil
+}
+
+// orDefault returns value when it is non-empty and def otherwise.
+func orDefault(value, def string) (s string) {
+	if value == "" {
+		return def
+	}
+
+	return value
+}
+
+// orDefaultDuration returns value when it is positive and def otherwise.
+func orDefaultDuration(value, def timeutil.Duration) (d timeutil.Duration) {
+	if value <= 0 {
+		return def
+	}
+
+	return value
+}
+
+// trailingDot returns value with a trailing dot appended when it is missing,
+// or def when value is empty.
+func trailingDot(value, def string) (s string) {
+	value = orDefault(value, def)
+	if !strings.HasSuffix(value, ".") {
+		value += "."
+	}
+
+	return value
 }
 
 // setupDNSFilteringConf sets up DNS filtering configuration settings.  All
@@ -494,15 +612,8 @@ func setupDNSFilteringConf(
 	hc *aghnet.HostsContainer,
 ) (err error) {
 	const (
-		dnsTimeout = 3 * time.Second
-
-		sbService                 = "safe_browsing"
-		defaultSafeBrowsingServer = `https://family.adguard-dns.com/dns-query`
-		sbTXTSuffix               = `sb.dns.adguard.com.`
-
-		pcService             = "parental_control"
-		defaultParentalServer = `https://family.adguard-dns.com/dns-query`
-		pcTXTSuffix           = `pc.dns.adguard.com.`
+		sbService = "safe_browsing"
+		pcService = "parental_control"
 	)
 
 	conf.Logger = baseLogger.With(slogutil.KeyPrefix, "filtering")
@@ -522,15 +633,25 @@ func setupDNSFilteringConf(
 
 	cacheTime := time.Duration(conf.CacheTime) * time.Minute
 
-	upsOpts := &upstream.Options{
-		Logger:    aghslog.NewForUpstream(baseLogger, aghslog.UpstreamTypeService),
-		Timeout:   dnsTimeout,
-		Bootstrap: safeBrowsingResolvers,
-	}
-
-	sbUps, err := upstream.AddressToUpstream(defaultSafeBrowsingServer, upsOpts)
+	serviceBootstrap, serviceBootstrapResolvers, err := newServiceBootstrapResolver(
+		ctx,
+		baseLogger,
+		conf.ServiceBootstrapDNS,
+		conf.ServiceTimeout,
+	)
 	if err != nil {
-		return fmt.Errorf("converting safe browsing server: %w", err)
+		return err
+	}
+	globalContext.serviceBootstrapResolvers = serviceBootstrapResolvers
+
+	sbServer := orDefault(conf.SafeBrowsingServer, defaultSafeBrowsingServer)
+	sbTXTSuffix := trailingDot(conf.SafeBrowsingTXTSuffix, defaultSafeBrowsingTXTSuffix)
+
+	sbUps, err := newServiceUpstream(
+		ctx, baseLogger, sbServer, sbService, serviceBootstrap, conf.ServiceTimeout,
+	)
+	if err != nil {
+		return err
 	}
 
 	conf.SafeBrowsingChecker = hashprefix.New(&hashprefix.Config{
@@ -557,9 +678,14 @@ func setupDNSFilteringConf(
 		conf.SafeBrowsingBlockHost = host
 	}
 
-	parUps, err := upstream.AddressToUpstream(defaultParentalServer, upsOpts)
+	pcServer := orDefault(conf.ParentalServer, defaultParentalServer)
+	pcTXTSuffix := trailingDot(conf.ParentalTXTSuffix, defaultParentalTXTSuffix)
+
+	parUps, err := newServiceUpstream(
+		ctx, baseLogger, pcServer, pcService, serviceBootstrap, conf.ServiceTimeout,
+	)
 	if err != nil {
-		return fmt.Errorf("converting parental server: %w", err)
+		return err
 	}
 
 	conf.ParentalControlChecker = hashprefix.New(&hashprefix.Config{

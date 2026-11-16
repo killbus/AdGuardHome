@@ -560,6 +560,12 @@ func closeDNSServer(ctx context.Context, l *slog.Logger) {
 		globalContext.filters.Close()
 	}
 
+	for _, r := range globalContext.serviceBootstrapResolvers {
+		if err := r.Close(); err != nil {
+			l.ErrorContext(ctx, "closing service bootstrap resolver", slogutil.KeyError, err)
+		}
+	}
+
 	if globalContext.stats != nil {
 		err := globalContext.stats.Close()
 		if err != nil {

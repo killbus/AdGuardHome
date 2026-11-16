@@ -29,6 +29,7 @@ import (
 	"github.com/AdguardTeam/golibs/logutil/slogutil"
 	"github.com/AdguardTeam/golibs/mathutil"
 	"github.com/AdguardTeam/golibs/syncutil"
+	"github.com/AdguardTeam/golibs/timeutil"
 	"github.com/AdguardTeam/urlfilter"
 	"github.com/AdguardTeam/urlfilter/filterlist"
 	"github.com/AdguardTeam/urlfilter/rules"
@@ -140,6 +141,33 @@ type Config struct {
 	// to DNS requests blocked by safe-browsing.
 	SafeBrowsingBlockHost string `yaml:"safebrowsing_block_host"`
 
+	// SafeBrowsingServer is the URL (or domain name) of the upstream used by
+	// the safe-browsing checker.  If empty, the default AdGuard family DNS
+	// server is used.
+	SafeBrowsingServer string `yaml:"safebrowsing_server"`
+
+	// ServiceBootstrapDNS is the list of upstream resolvers used to
+	// bootstrap the safe browsing and parental control upstreams when their
+	// addresses are domain names.  Each entry must be an IP-literal upstream
+	// address (for example "1.1.1.1", "udp://8.8.8.8:53", or
+	// "tls://9.9.9.9:853"); domain names are not accepted, since a bootstrap
+	// resolver must not require name resolution of its own.  If empty, the
+	// default AdGuard family DNS resolvers are used.
+	ServiceBootstrapDNS []string `yaml:"service_bootstrap_dns"`
+
+	// ParentalServer is the URL (or domain name) of the upstream used by the
+	// parental control checker.  If empty, the default AdGuard family DNS
+	// server is used.
+	ParentalServer string `yaml:"parental_server"`
+
+	// SafeBrowsingTXTSuffix is the TXT suffix used by the safe-browsing
+	// checker.  It must end with a dot.  If empty, the default value is used.
+	SafeBrowsingTXTSuffix string `yaml:"safebrowsing_txt_suffix"`
+
+	// ParentalTXTSuffix is the TXT suffix used by the parental control
+	// checker.  It must end with a dot.  If empty, the default value is used.
+	ParentalTXTSuffix string `yaml:"parental_txt_suffix"`
+
 	// Rewrites is a list of legacy DNS rewrite records.
 	Rewrites []*LegacyRewrite `yaml:"rewrites"`
 
@@ -165,6 +193,10 @@ type Config struct {
 	ParentalCacheSize     uint `yaml:"parental_cache_size"`     // (in bytes)
 	// TODO(a.garipov): Use timeutil.Duration
 	CacheTime uint `yaml:"cache_time"` // Element's TTL (in minutes)
+
+	// ServiceTimeout is the timeout for requests to the safe browsing and
+	// parental control upstream servers.  If zero, the default value is used.
+	ServiceTimeout timeutil.Duration `yaml:"service_timeout"`
 
 	// enabled is used to be returned within Settings.
 	//

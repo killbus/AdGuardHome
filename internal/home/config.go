@@ -236,6 +236,19 @@ const (
 	defaultParentalBlockHost     = "family-block.dns.adguard.com"
 )
 
+// Default safe browsing and parental control upstreams.  Both services share
+// the AdGuard family DNS server by default.
+const (
+	defaultSafeBrowsingServer = `https://family.adguard-dns.com/dns-query`
+	defaultParentalServer     = `https://family.adguard-dns.com/dns-query`
+)
+
+// Default hash-prefix TXT query suffixes.  They must end with a dot.
+const (
+	defaultSafeBrowsingTXTSuffix = `sb.dns.adguard.com.`
+	defaultParentalTXTSuffix     = `pc.dns.adguard.com.`
+)
+
 // defaultLocalDomainName is the default domain name used for DHCP hosts.
 const defaultLocalDomainName = "lan"
 
@@ -355,6 +368,8 @@ var config = &configuration{
 		SafeSearchCacheSize:   1 * 1024 * 1024,
 		ParentalCacheSize:     1 * 1024 * 1024,
 		CacheTime:             30,
+		// Default service timeout keeps the previous hardcoded value.
+		ServiceTimeout: timeutil.Duration(3 * time.Second),
 
 		SafeSearchConf: filtering.SafeSearchConfig{
 			Enabled:    false,

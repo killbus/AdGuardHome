@@ -2,6 +2,7 @@ package home
 
 import (
 	"cmp"
+	"context"
 	"net/http"
 	"net/netip"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/AdguardTeam/golibs/logutil/slogutil"
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/AdguardTeam/golibs/testutil"
+	"github.com/AdguardTeam/golibs/timeutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -84,4 +86,140 @@ func TestMain(m *testing.M) {
 	initCmdLineOpts()
 
 	testutil.DiscardLogOutput(m)
+}
+
+func TestOrDefault(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		value  string
+		def    string
+		expect string
+	}{
+		{name: "empty value", value: "", def: "default", expect: "default"},
+		{name: "non-empty value", value: "custom", def: "default", expect: "custom"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, test.expect, orDefault(test.value, test.def))
+		})
+	}
+}
+
+func TestTrailingDot(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		value  string
+		def    string
+		expect string
+	}{
+		{name: "empty value", value: "", def: "sb.dns.adguard.com.", expect: "sb.dns.adguard.com."},
+		{name: "value without dot", value: "example.com", def: "default.", expect: "example.com."},
+		{name: "value with dot", value: "example.com.", def: "default.", expect: "example.com."},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, test.expect, trailingDot(test.value, test.def))
+		})
+	}
+}
+
+func TestOrDefaultDuration(t *testing.T) {
+	t.Parallel()
+
+	def := timeutil.Duration(3 * time.Second)
+
+	tests := []struct {
+		name   string
+		value  timeutil.Duration
+		expect timeutil.Duration
+	}{
+		{name: "zero value", value: 0, expect: def},
+		{name: "negative value", value: timeutil.Duration(-time.Second), expect: def},
+		{name: "positive value", value: timeutil.Duration(10 * time.Second), expect: timeutil.Duration(10 * time.Second)},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, test.expect, orDefaultDuration(test.value, def))
+		})
+	}
+}
+
+func TestNewServiceBootstrapResolver(t *testing.T) {
+	t.Parallel()
+
+	t.Run("default resolver is returned for empty addresses", func(t *testing.T) {
+		t.Parallel()
+
+		r, resolvers, err := newServiceBootstrapResolver(
+			context.Background(),
+			testLogger,
+			[]string{"", "# comment"},
+			timeutil.Duration(3*time.Second),
+		)
+
+		require.NoError(t, err)
+		require.Nil(t, resolvers)
+		require.Equal(t, safeBrowsingResolvers, r)
+	})
+
+	t.Run("custom resolvers are parsed and wrapped", func(t *testing.T) {
+		t.Parallel()
+
+		r, resolvers, err := newServiceBootstrapResolver(
+			context.Background(),
+			testLogger,
+			[]string{"192.0.2.1", "192.0.2.2"},
+			timeutil.Duration(3*time.Second),
+		)
+
+		require.NoError(t, err)
+		require.Len(t, resolvers, 2)
+		require.NotNil(t, r)
+
+		for _, resolver := range resolvers {
+			require.NoError(t, resolver.Close())
+		}
+	})
+
+	t.Run("invalid address is rejected", func(t *testing.T) {
+		t.Parallel()
+
+		_, resolvers, err := newServiceBootstrapResolver(
+			context.Background(),
+			testLogger,
+			[]string{"https://example.com/not-a-dns-path"},
+			timeutil.Duration(3*time.Second),
+		)
+
+		require.Error(t, err)
+		require.Nil(t, resolvers)
+	})
+
+	t.Run("domain-name bootstrap is rejected with a hint", func(t *testing.T) {
+		t.Parallel()
+
+		_, resolvers, err := newServiceBootstrapResolver(
+			context.Background(),
+			testLogger,
+			[]string{"1.1.1.1", "https://dns10.quad9.net/dns-query"},
+			timeutil.Duration(3*time.Second),
+		)
+
+		require.Error(t, err)
+		require.Nil(t, resolvers)
+		require.Contains(t, err.Error(), "IP-literal")
+	})
 }
